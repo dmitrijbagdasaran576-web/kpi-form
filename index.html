@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>KPI-отчёт</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    margin: 0; padding: 16px;
+    background: var(--tg-theme-bg-color, #fff);
+    color: var(--tg-theme-text-color, #111);
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--tg-theme-hint-color, #888); font-size: 13px; margin-bottom: 16px; }
+  .row { margin-bottom: 12px; }
+  label { display: block; font-size: 14px; margin-bottom: 4px; }
+  input, textarea {
+    width: 100%; box-sizing: border-box; font-size: 16px;
+    padding: 10px; border: 1px solid var(--tg-theme-hint-color, #ccc);
+    border-radius: 10px; background: var(--tg-theme-secondary-bg-color, #f4f4f5);
+    color: var(--tg-theme-text-color, #111);
+  }
+  .times { display: flex; gap: 10px; }
+  .times > div { flex: 1; }
+  .num input { text-align: right; }
+  button {
+    width: 100%; font-size: 17px; font-weight: 600; padding: 14px; margin-top: 18px;
+    border: none; border-radius: 12px; cursor: pointer;
+    background: var(--tg-theme-button-color, #2ea6ff); color: var(--tg-theme-button-text-color, #fff);
+  }
+  .err { color: #e53935; font-size: 13px; margin-top: 8px; min-height: 16px; }
+</style>
+</head>
+<body>
+<h1 id="title">Дневной отчёт</h1>
+<div class="sub" id="who"></div>
+
+<div class="row">
+  <label>Дата</label>
+  <input type="date" id="date">
+</div>
+<div class="row times">
+  <div><label>Начало смены</label><input type="time" id="start"></div>
+  <div><label>Конец смены</label><input type="time" id="end"></div>
+</div>
+
+<div id="fields"></div>
+
+<div class="row">
+  <label>Доп задачи (текст, не в расчёт)</label>
+  <textarea id="extra" rows="2" placeholder="уборка, вынос мусора, телефон…"></textarea>
+</div>
+
+<div class="err" id="err"></div>
+<button id="send">Отправить отчёт</button>
+
+<script>
+const FIELDS = {
+  perenos: [["Лёгкие","perenos_light"],["Средние","perenos_medium"],["Сложные","perenos_hard"],["Упаковка наши (шт)","pack_own"],["Упаковка ВБ (шт)","pack_wb"],["Предпечатка (ч)","prepress_h"],["Плоттер (ч)","plotter_h"]],
+  soglasovanie: [["Согласование (заказов)","soglasovanie"],["Досогласование (заказов)","dosoglasovanie"],["Лёгкие","perenos_light"],["Средние","perenos_medium"],["Сложные","perenos_hard"],["Предпечатка (ч)","prepress_h"],["Плоттер (ч)","plotter_h"]],
+  cifra: [["Без праймера маленький","cifra_np_s"],["Без праймера средний","cifra_np_m"],["Без праймера большой","cifra_np_l"],["С праймером маленький","cifra_pr_s"],["С праймером средний","cifra_pr_m"],["С праймером большой","cifra_pr_l"],["Согласование (заказов)","soglasovanie"],["Досогласование (заказов)","dosoglasovanie"],["Обслуживание цифры (ч)","cifra_service_h"],["Помощь (ч)","help_h"]],
+  dtf: [["Метраж обычный (м)","dtf_m"],["Метраж опт (м)","dtf_opt"],["Метраж ВБ (м)","dtf_wb"],["Упаковка топеров (пакетов)","pack_topers"],["Упаковка наши (шт)","pack_own"],["Упаковка ВБ (шт)","pack_wb"],["Помощь ВБ (ч)","help_h"]],
+  upakovka: [["Упаковка/проверка наши (шт)","pack_own"],["Упаковка ВБ (шт)","pack_wb"],["Доп-время бирки/пересчёт (ч)","pack_extra_h"],["Помощь ВБ (ч)","help_h"]],
+};
+const SPHERE_RU = { perenos:"Перенос", soglasovanie:"Согласование", cifra:"Цифра", dtf:"ДТФ", upakovka:"Упаковка" };
+
+const tg = window.Telegram ? window.Telegram.WebApp : null;
+if (tg) { tg.ready(); tg.expand(); }
+
+const p = new URLSearchParams(location.search);
+const sphere = (p.get("sphere") || "perenos").toLowerCase();
+const fio = p.get("fio") || "";
+document.getElementById("who").textContent = (fio ? fio + " · " : "") + (SPHERE_RU[sphere] || sphere);
+
+// дата по умолчанию — сегодня
+const d = new Date();
+document.getElementById("date").value = d.toISOString().slice(0,10);
+
+// поля активностей
+const wrap = document.getElementById("fields");
+(FIELDS[sphere] || []).forEach(([label, key]) => {
+  const row = document.createElement("div");
+  row.className = "row num";
+  row.innerHTML = `<label>${label}</label><input type="number" inputmode="decimal" min="0" step="any" data-key="${key}" placeholder="0">`;
+  wrap.appendChild(row);
+});
+
+function send() {
+  const err = document.getElementById("err");
+  const start = document.getElementById("start").value;
+  const end = document.getElementById("end").value;
+  if (!start || !end) { err.textContent = "Укажи время смены (начало и конец)."; return; }
+
+  const q = {};
+  document.querySelectorAll("input[data-key]").forEach(inp => {
+    const v = parseFloat((inp.value || "").replace(",", "."));
+    if (v && v > 0) q[inp.dataset.key] = (q[inp.dataset.key] || 0) + v;
+  });
+
+  const iso = document.getElementById("date").value; // yyyy-mm-dd
+  const [Y,M,D] = iso.split("-");
+  const payload = {
+    sphere: sphere,
+    date: `${D}.${M}.${Y}`,
+    shift: `${start}-${end}`,
+    q: q,
+    extra: document.getElementById("extra").value.trim(),
+  };
+
+  if (tg && tg.sendData) { tg.sendData(JSON.stringify(payload)); }
+  else { err.textContent = "Открой форму из Telegram (кнопкой в боте)."; }
+}
+document.getElementById("send").addEventListener("click", send);
+</script>
+</body>
+</html>
