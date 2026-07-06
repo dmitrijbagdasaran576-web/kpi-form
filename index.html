@@ -17,7 +17,7 @@
   .sub { color: var(--tg-theme-hint-color, #888); font-size: 13px; margin-bottom: 16px; }
   .row { margin-bottom: 12px; }
   label { display: block; font-size: 14px; margin-bottom: 4px; }
-  input, textarea {
+  input, textarea, select {
     width: 100%; box-sizing: border-box; font-size: 16px;
     padding: 10px; border: 1px solid var(--tg-theme-hint-color, #ccc);
     border-radius: 10px; background: var(--tg-theme-secondary-bg-color, #f4f4f5);
@@ -47,6 +47,11 @@
   <div><label>Конец смены</label><input type="time" id="end"></div>
 </div>
 
+<div class="row" id="sphereRow" style="display:none">
+  <label>Сфера отчёта</label>
+  <select id="sphereSel"></select>
+</div>
+
 <div id="fields"></div>
 
 <div class="row">
@@ -71,22 +76,42 @@ const tg = window.Telegram ? window.Telegram.WebApp : null;
 if (tg) { tg.ready(); tg.expand(); }
 
 const p = new URLSearchParams(location.search);
-const sphere = (p.get("sphere") || "perenos").toLowerCase();
+let sphere = (p.get("sphere") || "perenos").toLowerCase();
 const fio = p.get("fio") || "";
-document.getElementById("who").textContent = (fio ? fio + " · " : "") + (SPHERE_RU[sphere] || sphere);
+const managerMode = !FIELDS[sphere];       // руководитель без производственной сферы
+if (managerMode) sphere = "perenos";
+
+function updateWho() {
+  document.getElementById("who").textContent = (fio ? fio + " · " : "") + (SPHERE_RU[sphere] || sphere);
+}
 
 // дата по умолчанию — сегодня
-const d = new Date();
-document.getElementById("date").value = d.toISOString().slice(0,10);
+document.getElementById("date").value = new Date().toISOString().slice(0,10);
 
-// поля активностей
 const wrap = document.getElementById("fields");
-(FIELDS[sphere] || []).forEach(([label, key]) => {
-  const row = document.createElement("div");
-  row.className = "row num";
-  row.innerHTML = `<label>${label}</label><input type="number" inputmode="decimal" min="0" step="any" data-key="${key}" placeholder="0">`;
-  wrap.appendChild(row);
-});
+function renderFields(s) {
+  wrap.innerHTML = "";
+  (FIELDS[s] || []).forEach(([label, key]) => {
+    const row = document.createElement("div");
+    row.className = "row num";
+    row.innerHTML = `<label>${label}</label><input type="number" inputmode="decimal" min="0" step="any" data-key="${key}" placeholder="0">`;
+    wrap.appendChild(row);
+  });
+}
+
+if (managerMode) {
+  const sel = document.getElementById("sphereSel");
+  Object.keys(FIELDS).forEach(s => {
+    const o = document.createElement("option");
+    o.value = s; o.textContent = SPHERE_RU[s] || s;
+    sel.appendChild(o);
+  });
+  sel.value = sphere;
+  document.getElementById("sphereRow").style.display = "";
+  sel.addEventListener("change", () => { sphere = sel.value; updateWho(); renderFields(sphere); });
+}
+updateWho();
+renderFields(sphere);
 
 function send() {
   const err = document.getElementById("err");
