@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>KPI</title>
+<title>KPI-отчёт</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root { color-scheme: light dark; }
@@ -27,57 +27,37 @@
   .times > div { flex: 1; }
   .num input { text-align: right; }
   button {
-    width: 100%; font-size: 17px; font-weight: 600; padding: 14px; margin-top: 12px;
+    width: 100%; font-size: 17px; font-weight: 600; padding: 14px; margin-top: 18px;
     border: none; border-radius: 12px; cursor: pointer;
     background: var(--tg-theme-button-color, #2ea6ff); color: var(--tg-theme-button-text-color, #fff);
-  }
-  .menu-btn {
-    text-align: left; margin-top: 10px;
-    background: var(--tg-theme-secondary-bg-color, #f4f4f5);
-    color: var(--tg-theme-text-color, #111);
-    border: 1px solid var(--tg-theme-hint-color, #ddd);
   }
   .err { color: #e53935; font-size: 13px; margin-top: 8px; min-height: 16px; }
 </style>
 </head>
 <body>
+<h1>Дневной отчёт</h1>
+<div class="sub" id="who"></div>
 
-<!-- МЕНЮ -->
-<div id="menuView">
-  <h1>Меню</h1>
-  <div class="sub" id="who"></div>
-  <button class="menu-btn" data-act="report">📝 Заполнить отчёт</button>
-  <button class="menu-btn" data-act="moe">📊 Моё за период</button>
-  <button class="menu-btn mgr" data-act="svodka" style="display:none">👥 Сводка по сотруднику</button>
-  <button class="menu-btn mgr" data-act="vedomost" style="display:none">💼 Ведомость</button>
+<div class="row" id="sphereRow" style="display:none">
+  <label>Сфера отчёта</label>
+  <select id="sphereSel"></select>
 </div>
 
-<!-- ФОРМА ОТЧЁТА -->
-<div id="formView" style="display:none">
-  <h1>Дневной отчёт</h1>
-  <div class="sub" id="who2"></div>
-
-  <div class="row" id="sphereRow" style="display:none">
-    <label>Сфера отчёта</label>
-    <select id="sphereSel"></select>
-  </div>
-
-  <div class="row"><label>Дата</label><input type="date" id="date"></div>
-  <div class="row times">
-    <div><label>Начало смены</label><input type="time" id="start"></div>
-    <div><label>Конец смены</label><input type="time" id="end"></div>
-  </div>
-
-  <div id="fields"></div>
-
-  <div class="row">
-    <label>Доп задачи (текст, не в расчёт)</label>
-    <textarea id="extra" rows="2" placeholder="уборка, вынос мусора, телефон…"></textarea>
-  </div>
-
-  <div class="err" id="err"></div>
-  <button id="send">Отправить отчёт</button>
+<div class="row"><label>Дата</label><input type="date" id="date"></div>
+<div class="row times">
+  <div><label>Начало смены</label><input type="time" id="start"></div>
+  <div><label>Конец смены</label><input type="time" id="end"></div>
 </div>
+
+<div id="fields"></div>
+
+<div class="row">
+  <label>Доп задачи (текст, не в расчёт)</label>
+  <textarea id="extra" rows="2" placeholder="уборка, вынос мусора, телефон…"></textarea>
+</div>
+
+<div class="err" id="err"></div>
+<button id="send">Отправить отчёт</button>
 
 <script>
 const FIELDS = {
@@ -95,39 +75,13 @@ if (tg) { tg.ready(); tg.expand(); }
 const p = new URLSearchParams(location.search);
 let sphere = (p.get("sphere") || "perenos").toLowerCase();
 const fio = p.get("fio") || "";
-const isManager = p.get("manager") === "1";
 const managerMode = !FIELDS[sphere];
 if (managerMode) sphere = "perenos";
 
-const whoTxt = (fio ? fio + " · " : "") + (isManager ? "Руководитель" : (SPHERE_RU[sphere] || sphere));
-document.getElementById("who").textContent = whoTxt;
-
-// показать пункты руководителя
-if (isManager) document.querySelectorAll(".mgr").forEach(b => b.style.display = "");
-
-// --- навигация меню/форма ---
-const menuView = document.getElementById("menuView");
-const formView = document.getElementById("formView");
-function showForm() {
-  menuView.style.display = "none"; formView.style.display = "";
-  if (tg && tg.BackButton) { tg.BackButton.show(); }
+function updateWho() {
+  document.getElementById("who").textContent = (fio ? fio + " · " : "") + (SPHERE_RU[sphere] || sphere);
 }
-function showMenu() {
-  formView.style.display = "none"; menuView.style.display = "";
-  if (tg && tg.BackButton) { tg.BackButton.hide(); }
-}
-if (tg && tg.BackButton) tg.BackButton.onClick(showMenu);
 
-document.querySelectorAll(".menu-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const act = btn.dataset.act;
-    if (act === "report") { showForm(); return; }
-    if (tg && tg.sendData) tg.sendData(JSON.stringify({ action: act }));
-  });
-});
-
-// --- форма ---
-document.getElementById("who2").textContent = whoTxt;
 document.getElementById("date").value = new Date().toISOString().slice(0,10);
 
 const wrap = document.getElementById("fields");
@@ -148,8 +102,9 @@ if (managerMode) {
   });
   sel.value = sphere;
   document.getElementById("sphereRow").style.display = "";
-  sel.addEventListener("change", () => { sphere = sel.value; renderFields(sphere); });
+  sel.addEventListener("change", () => { sphere = sel.value; updateWho(); renderFields(sphere); });
 }
+updateWho();
 renderFields(sphere);
 
 function send() {
@@ -167,15 +122,15 @@ function send() {
   const iso = document.getElementById("date").value;
   const [Y,M,D] = iso.split("-");
   const payload = {
-    action: "report",
     sphere: sphere,
     date: `${D}.${M}.${Y}`,
     shift: `${start}-${end}`,
     q: q,
     extra: document.getElementById("extra").value.trim(),
   };
-  if (tg && tg.sendData) tg.sendData(JSON.stringify(payload));
-  else err.textContent = "Открой из Telegram.";
+
+  if (tg && tg.sendData) { tg.sendData(JSON.stringify(payload)); }
+  else { err.textContent = "Открой форму кнопкой «Заполнить отчёт» в боте."; }
 }
 document.getElementById("send").addEventListener("click", send);
 </script>
