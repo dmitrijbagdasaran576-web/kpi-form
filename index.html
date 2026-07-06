@@ -51,6 +51,15 @@
 
 <div id="fields"></div>
 
+<div class="row num">
+  <label>Брак (шт)</label>
+  <input type="number" inputmode="decimal" min="0" step="any" id="brak" placeholder="0">
+</div>
+<div class="row">
+  <label>Комментарий / № заказа по браку</label>
+  <input type="text" id="brakComment" placeholder="напр. №33920585 — отпечаталось криво">
+</div>
+
 <div class="row">
   <label>Доп задачи (текст, не в расчёт)</label>
   <textarea id="extra" rows="2" placeholder="уборка, вынос мусора, телефон…"></textarea>
@@ -126,6 +135,8 @@ function send() {
     date: `${D}.${M}.${Y}`,
     shift: `${start}-${end}`,
     q: q,
+    brak: parseFloat((document.getElementById("brak").value || "").replace(",", ".")) || 0,
+    brak_comment: document.getElementById("brakComment").value.trim(),
     extra: document.getElementById("extra").value.trim(),
   };
 
